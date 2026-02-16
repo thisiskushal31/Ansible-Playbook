@@ -1,0 +1,23 @@
+// Reconfigure replica set to include all nodes with proper failover settings
+rs.reconfig({
+  _id: "{{mongo_repl_set}}", 
+  members: [
+    {% for host in groups['primary'] %}
+    {_id: {{ loop.index0 }}, host: "{{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{mongo_port}}", priority: 2},
+    {% endfor %}
+    {% for host in groups['secondary'] %}
+    {_id: {{ loop.index0 + groups['primary'] | length }}, host: "{{ hostvars[host]['ansible_default_ipv4']['address'] }}:{{mongo_port}}", priority: 1}
+    {% if not loop.last %},{% endif %}
+    {% endfor %}
+  ]
+}, {force: true});
+
+// Configure write concern for majority (important for failover)
+db.adminCommand({
+  setDefaultRWConcern: 1,
+  defaultWriteConcern: {
+    w: "majority",
+    j: true,
+    wtimeout: 5000
+  }
+});

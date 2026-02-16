@@ -1,0 +1,14 @@
+mongo_data_dir: '/var/lib/mongodb'
+mongo_log_dir: '/var/log/mongodb'
+mongo_version: '8.0'
+mongo_repl_set: "rs0"
+mongo_authorization: 'enabled'
+mongo_key_auth_secret: ''
+mongo_port: 27017
+mongo_paramteres: {}
+mongo_data_dir_per_db: 'true'
+mongo_db_engine: 'wiredTiger'
+mongo_db_engine_config: { engineConfig: { cacheSizeGB: 1 } }
+mongo_enable_security: true
+mongo_enable_replication: true
+aws_region: 'us-east-1'

@@ -1,0 +1,226 @@
+---
+- name: check if mongo already installed
+  stat: path=/usr/bin/mongosh
+  register: mongo_bin
+
+- name: Validate MongoDB version (this playbook supports 8.0 only)
+  fail:
+    msg: "MongoDB version {{ mongo_version }} is not supported. This playbook installs MongoDB 8.0 only."
+  when: mongo_version != '8.0'
+
+- name: Check system requirements for MongoDB {{ mongo_version }}
+  fail:
+    msg: "Insufficient RAM. MongoDB {{ mongo_version }} requires at least 2GB RAM. Available: {{ ansible_memtotal_mb }}MB"
+  when: 
+    - mongo_version in ['7.0', '8.0']
+    - ansible_memtotal_mb < 2048
+
+- name: Install dependencies
+  apt: name={{ item }} state=latest update_cache=yes
+  with_items:
+    - gnupg
+    - curl
+    - ca-certificates
+
+- block:
+    - name: MongoDB | Fetch MongoDB signing key for version {{ mongo_version }}
+      shell: |
+          curl -fsSL https://pgp.mongodb.com/server-{{mongo_version}}.asc | gpg -o /usr/share/keyrings/mongodb-server-{{mongo_version}}.gpg  --dearmor --yes
+          chown _apt /usr/share/keyrings/mongodb-server-{{mongo_version}}.gpg
+
+    - name: MongoDB | Add MongoDB repository for version {{ mongo_version }}
+      shell:
+        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-{{mongo_version}}.gpg ] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/{{mongo_version}} multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-{{mongo_version}}.list
+
+    - name: install mongodb packages for version {{ mongo_version }}
+      apt: name={{ item }} state=latest update_cache=yes
+      with_items:
+        - mongodb-org-server
+        - mongodb-org-mongos
+        - mongodb-org-shell
+        - mongodb-org-tools
+        - mongodb-mongosh
+      when: mongo_version == '6.0'
+      register: mongodb_6_packages
+
+    - name: install mongodb packages for version {{ mongo_version }} (7.0+)
+      apt: name={{ item }} state=latest update_cache=yes
+      with_items:
+        - mongodb-org-server
+        - mongodb-org-mongos
+        - mongodb-org-shell
+        - mongodb-org-tools
+        - mongodb-mongosh
+        
+      when: mongo_version in ['7.0', '8.0']
+      register: mongodb_7plus_packages
+
+    - name: Verify MongoDB packages installation
+      shell: dpkg -l | grep mongodb-org
+      register: mongodb_packages
+      changed_when: false
+
+    - name: Display installed MongoDB packages
+      debug:
+        msg: "Installed MongoDB packages: {{ mongodb_packages.stdout_lines }}"
+
+    - name: Check if MongoDB packages were installed successfully
+      fail:
+        msg: "Failed to install MongoDB packages for version {{ mongo_version }}. Please check the package availability."
+      when: 
+        - mongo_version == '6.0' and mongodb_6_packages.results | selectattr('failed', 'equalto', true) | list | length > 0
+        - mongo_version in ['7.0', '8.0'] and mongodb_7plus_packages.results | selectattr('failed', 'equalto', true) | list | length > 0
+
+    - name: install ntp package
+      apt:
+       name: ntp
+       state: present
+       update_cache: yes
+
+    - name: set timezone to IST
+      shell: timedatectl set-timezone Asia/Kolkata
+
+    - name: Add or modify nofile soft limit for the service user
+      community.general.pam_limits:
+        domain: mongodb
+        limit_type: soft
+        limit_item: nofile
+        value: 64000
+
+    - name: Add or modify nofile hard limit for the service user
+      community.general.pam_limits:
+        domain: mongodb
+        limit_type: hard
+        limit_item: nofile
+        value: 64000
+
+    - name: set disable swapping
+      ansible.posix.sysctl:
+        name: vm.swappiness
+        value: '0'
+        state: present
+
+    - name: Create MongoDB PID directory for version {{ mongo_version }}
+      file:
+        path: /var/run/mongodb
+        state: directory
+        owner: mongodb
+        group: mongodb
+        mode: '0755'
+      when: mongo_version in ['7.0', '8.0']
+
+    - name: Restart the server
+      ansible.builtin.reboot:
+
+    - name: Pause for 5 minutes to build app cache
+      ansible.builtin.pause:
+        minutes: 1
+
+    # remove old datadir
+    - name: remove existing data directory
+      file:
+        path: "{{mongo_data_dir}}"
+        state: absent
+      ignore_errors: true
+
+    - name: copy configuration file for MongoDB {{ mongo_version }}
+      template: src=mongod-{{mongo_version}}.conf.j2 dest=/etc/mongod.conf mode=0644
+
+    - name: create data directory
+      file:
+        path: "{{mongo_data_dir}}"
+        state: directory
+        owner: mongodb
+        group: mongodb
+
+    - name: MongoDB - start server
+      service: name=mongod state=restarted enabled=true
+
+    - name: copy createAdmin script
+      template: src=createAdmins.j2 dest=/tmp/createAdmins.js
+      when:
+      - "'primary' in group_names"
+
+    - name: create administrator users
+      shell: mongosh {{ ansible_default_ipv4.address }}:{{mongo_port}}/admin < /tmp/createAdmins.js
+      when:
+      - "'primary' in group_names"
+
+    # - name: MongoDB - stop server
+    #   service: name=mongod state=stopped
+  when: mongo_bin.stat.exists == False or ('secondary' in group_names and mongo_enable_replication == true)
+
+# - name: check if ssl folder already exists
+#   stat: path=/etc/ssl
+#   register: ssl_folder
+
+# - name: remove datadir content if any
+#   shell: rm -rf {{mongo_data_dir}}/*
+
+# - name: re-create ssl folder
+#   file: path=/etc/ssl state=directory
+#   when: (ssl_folder.stat.isdir == False) or ({{ force|default(False) }} == True)
+
+# - name: create self-signed SSL cert
+#   command: openssl req -newkey rsa:2048 -new -x509 -days 365 -nodes -subj "/C=FR/ST=PACA/L=SophiaAntipolis/O=YourOrga/CN=contact@yourorga.com" -out /etc/ssl/mongodb-cert.crt -keyout /etc/ssl/mongodb-cert.key
+
+# - name: compile self-signed SSL cert in PEM file
+#   shell: cat /etc/ssl/mongodb-cert.key /etc/ssl/mongodb-cert.crt > /etc/ssl/mongodb.pem
+
+# - name: backup mongo config
+#   command: mv /etc/mongod.conf /etc/mongod.conf.bak
+
+# - name: check if mongo config exist
+#   stat: path=/etc/mongod.conf
+#   register: mongo_config
+#   tags:
+#   - authkey
+ 
+# # On next startup, a configuration file will be used
+# - name: copy configuration file
+#   template: src=mongod-{{mongo_version}}.conf.j2 dest=/etc/mongod.conf mode=0644
+#   notify: restart_mongod
+
+  # when: mongo_config.stat.exists == False
+  # tags:
+  # - authkey
+
+# - name: fetch auth key
+#   shell: |
+#     gcloud secrets versions access latest --secret  {{mongo_key_auth_secret}} > /etc/mongo.keyfile
+#     chown mongodb:monogdb /etc/mongo.keyfile
+#     chmod 600 /etc/mongo.keyfile
+
+# - name: create data directory
+#   file:
+#     path: "{{mongo_data_dir}}"
+#     state: directory
+#     owner: mongodb
+#     group: mongodb
+#   tags:
+#   - temp
+
+#  when: mongo_bin.stat.exists == False
+
+# - name: MongoDB | Insure deamon is running correctly
+#   service: name=mongod state=restarted
+#   # when: mongo_config.stat.exists == False
+
+# Configuration update for secondary nodes when MongoDB is already installed
+- block:
+    - name: update configuration file for secondary MongoDB {{ mongo_version }}
+      template: src=mongod-{{mongo_version}}.conf.j2 dest=/etc/mongod.conf mode=0644
+
+    - name: restart MongoDB service on secondary
+      service: name=mongod state=restarted enabled=true
+
+  when: 
+    - mongo_bin.stat.exists == True
+    - "'secondary' in group_names" 
+    - mongo_enable_replication == true
+
+- name: Flush all handlers
+  meta: flush_handlers
+
+- name: wait connection to mongo port
+  wait_for: host={{ansible_default_ipv4.address}} port={{mongo_port}} state="started" delay=5

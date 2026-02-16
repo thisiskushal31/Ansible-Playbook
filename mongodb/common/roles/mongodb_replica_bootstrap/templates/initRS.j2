@@ -1,0 +1,6 @@
+rs.initiate({
+  _id: "{{mongo_repl_set}}", 
+  members: [
+    {_id: 0, host: "{{ ansible_default_ipv4.address }}:{{mongo_port}}", priority: 2}
+  ]
+});

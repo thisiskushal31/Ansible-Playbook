@@ -1,0 +1,9 @@
+# MongoDB 7.0 specific variables
+# Include this file in your playbook to use MongoDB 7.0
+
+# MongoDB version
+mongo_version: '7.0'
+
+# Basic configuration
+mongo_enable_replication: true
+mongo_enable_security: true

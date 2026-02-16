@@ -1,0 +1,55 @@
+# mongod.conf for MongoDB 8.0
+
+# for documentation of all options, see:
+#   https://docs.mongodb.com/manual/reference/configuration-options/
+
+# Where and how to store data.
+storage:
+  dbPath: {{mongo_data_dir}}
+  # Note: journal.enabled is deprecated in MongoDB 8.0 and removed
+  # MongoDB 8.0 uses a new storage engine architecture
+  directoryPerDB: {{ mongo_data_dir_per_db }}
+  engine: {{  mongo_db_engine }}
+
+
+# where to write logging data.
+systemLog:
+  destination: file
+  logAppend: true
+  path: {{mongo_log_dir}}/mongod.log
+  logRotate: reopen
+
+
+# network interfaces
+net:
+  port: {{mongo_port}}
+  bindIp: {{ansible_default_ipv4.address}}
+
+
+# how the process runs
+processManagement:
+  timeZoneInfo: /usr/share/zoneinfo
+
+
+#operationProfiling:
+
+{% if mongo_enable_replication == true  %}
+replication:
+  replSetName: {{mongo_repl_set}}
+  enableMajorityReadConcern: true
+{% endif %}
+
+{% if mongo_enable_security == true  %}
+security:
+  authorization: {{mongo_authorization}}
+  keyFile: /etc/mongo.keyfile
+{% endif %}
+
+#sharding:
+
+{% if mongo_paramteres %}
+setParameter:
+{% for key, value in mongo_paramteres.items() %}
+  {{ key }}: {{ value }} 
+{% endfor %}
+{% endif %}

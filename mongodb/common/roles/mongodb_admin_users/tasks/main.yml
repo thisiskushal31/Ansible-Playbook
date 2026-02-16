@@ -1,0 +1,8 @@
+---
+- debug: msg="current host expected value:{{ groups['primary'][0] }} - current host current value:{{ inventory_hostname }}"
+
+- name: copy createAdmin script
+  template: src=createAdmins.j2 dest=/tmp/createAdmins.js
+
+- name: create administrator users
+  shell: mongosh {{ ansible_default_ipv4.address }}:{{mongo_port}} < /tmp/createAdmins.js

@@ -1,0 +1,12 @@
+# Sample inventory for EC2 MongoDB hosts. Set primary/secondary IPs or hostnames.
+
+[primary]
+# 10.0.1.10
+
+[secondary]
+# 10.0.1.11
+# 10.0.1.12
+
+[all:vars]
+# mongo_key_auth_secret=prod/mongodb/keyfile
+# aws_region=us-east-1

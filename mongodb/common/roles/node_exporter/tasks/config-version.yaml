@@ -1,0 +1,47 @@
+---
+- name: Debug - Check node_exporter_version variable
+  debug:
+    msg: "Current node_exporter_version: {{ node_exporter_version | default('not set') }}"
+
+- name: Determine latest GitHub release (local)
+  delegate_to: localhost
+  become: false
+  uri:
+    url: "https://api.github.com/repos/prometheus/node_exporter/releases/latest"
+    body_format: json
+    status_code: [200, 404, 500]
+    timeout: 30
+  register: _github_release
+  retries: 5
+  delay: 10
+  until: _github_release is defined and _github_release.status is defined and _github_release.status == 200
+  run_once: true
+
+- name: Debug - GitHub API response
+  debug:
+    msg: "GitHub API response: {{ _github_release }}"
+  when: _github_release is defined
+
+- name: Check GitHub API response
+  fail:
+    msg: "Failed to fetch GitHub release. Status: {{ _github_release.status | default('unknown') }}, Response: {{ _github_release.msg | default('no message') }}"
+  when: _github_release.status != 200
+
+- name: Set node_exporter_version from GitHub
+  set_fact:
+    node_exporter_version: "{{ _github_release.json.tag_name
+      | regex_replace('^v?([0-9\\.]+)$', '\\1') }}"
+  when: _github_release.status == 200
+
+- name: Set fallback node_exporter_version if GitHub fails
+  set_fact:
+    node_exporter_version: "1.6.1"
+  when: _github_release.status != 200
+
+- name: Set node_exporter_download_url
+  set_fact:
+    node_exporter_download_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+
+- name: Debug - Final node_exporter_version
+  debug:
+    msg: "Final node_exporter_version: {{ node_exporter_version }}, Download URL: {{ node_exporter_download_url }}"

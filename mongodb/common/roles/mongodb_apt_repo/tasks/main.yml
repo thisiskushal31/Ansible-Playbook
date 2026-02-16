@@ -1,0 +1,17 @@
+---
+- name: Install dependencies
+  apt: name={{ item }} state=latest update_cache=yes
+  with_items:
+    - gnupg
+    - curl
+
+- name: check if mongo already installed
+  stat: path=/usr/bin/mongosh
+  register: mongo_bin
+
+
+- name: MongoDB | Fetch 10Gen signing key
+  shell: |
+      curl -fsSL https://pgp.mongodb.com/server-{{mongo_version}}.asc | gpg -o /etc/apt/trusted.gpg.d/mongodb-server-{{mongo_version}}.gpg  --dearmor
+      chown _apt /etc/apt/trusted.gpg.d/mongodb-server-{{mongo_version}}.gpg
+  when: mongo_bin.stat.exists == False

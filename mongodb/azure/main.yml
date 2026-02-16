@@ -1,0 +1,75 @@
+---
+# Azure VMs – MongoDB replica set. Keyfile is read from Key Vault at runtime.
+
+- hosts: all
+  become: true
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  vars:
+    mongo_version: "{{ mongo_version | default('8.0') }}"
+  roles:
+    - role: mongodb_install
+  tags: [add_members]
+  handlers:
+    - name: restart_mongod
+      service: name=mongod state=restarted
+
+- hosts: primary
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  become: true
+  vars:
+    mongo_version: "{{ mongo_version | default('8.0') }}"
+    mongo_enable_security: true
+  roles:
+    - mongodb_admin_users
+    - mongodb_app_users
+    - mongodb_replica_bootstrap
+    - mongodb_keyfile_azure
+  handlers:
+    - name: restart_mongod
+      service: name=mongod state=restarted
+
+- hosts: secondary
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  become: true
+  vars:
+    mongo_version: "{{ mongo_version | default('8.0') }}"
+    mongo_enable_replication: true
+    mongo_enable_security: true
+    mongo_repl_set: "{{ mongo_repl_set | default('rs0') }}"
+  roles:
+    - role: mongodb_install
+    - role: mongodb_keyfile_azure
+  handlers:
+    - name: restart_mongod
+      service: name=mongod state=restarted
+  tags: [add_members]
+
+- hosts: secondary
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  become: true
+  tasks:
+    - name: Wait until secondary mongod is listening
+      wait_for:
+        host: "{{ ansible_default_ipv4.address }}"
+        port: "{{ mongo_port | default(27017) }}"
+        state: started
+        delay: 10
+  tags: [add_members]
+
+- hosts: secondary
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  become: true
+  vars:
+    mongo_version: "{{ mongo_version | default('8.0') }}"
+  roles:
+    - role: mongodb_replica_join
+  tags: [add_members]
+
+- hosts: all
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  become: true
+  vars:
+    mongo_version: "{{ mongo_version | default('8.0') }}"
+  roles:
+    - role: node_exporter
+  tags: [monitoring]

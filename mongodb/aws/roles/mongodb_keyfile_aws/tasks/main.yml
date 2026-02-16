@@ -1,0 +1,47 @@
+---
+- name: Check for existing keyfile
+  ansible.builtin.stat:
+    path: /etc/mongo.keyfile
+  register: mongo_auth_key
+
+- block:
+    - name: Retrieve replica set key from Secrets Manager
+      ansible.builtin.shell:
+        cmd: "aws secretsmanager get-secret-value --secret-id {{ mongo_key_auth_secret }} --region {{ aws_region }} --query SecretString --output text"
+      register: fetch_secret_result
+      changed_when: true
+      no_log: true
+
+    - name: Abort when secret retrieval fails
+      ansible.builtin.fail:
+        msg: "Could not read replica set key from Secrets Manager. Check secret name/ARN, region, and IAM (secretsmanager:GetSecretValue)."
+      when: fetch_secret_result.rc != 0
+
+    - name: Persist keyfile on disk
+      ansible.builtin.copy:
+        content: "{{ fetch_secret_result.stdout }}"
+        dest: /etc/mongo.keyfile
+        mode: '0600'
+        owner: mongodb
+        group: mongodb
+      when: fetch_secret_result.rc == 0
+      no_log: true
+
+    - name: Deploy mongod config with auth enabled
+      ansible.builtin.template:
+        src: "mongod-{{ mongo_version }}.conf.j2"
+        dest: /etc/mongod.conf
+        mode: '0644'
+
+    - name: Restart mongod
+      ansible.builtin.service:
+        name: mongod
+        state: restarted
+
+    - name: Ensure mongod is listening
+      ansible.builtin.wait_for:
+        host: "{{ ansible_default_ipv4.address }}"
+        port: "{{ mongo_port }}"
+        state: started
+        delay: 5
+  when: (not mongo_auth_key.stat.exists) or ((mongo_auth_key.stat.size | default(0)) == 0)

@@ -1,0 +1,14 @@
+mongo_data_dir: '/var/lib/mongodb'
+mongo_log_dir: '/var/log/mongodb'
+mongo_version: '8.0'
+mongo_repl_set: "rs0"
+mongo_authorization: 'disabled'
+mongo_key_auth_secret: 'test-secret'
+mongo_port: 27017
+mongo_paramteres: {}
+mongo_engine: 'wiredTiger'
+mongo_data_dir_per_db: 'true'
+mongo_db_engine: 'wiredTiger'
+mongo_db_engine_config: {engineConfig: {cacheSizeGB: 1}}
+mongo_enable_replication: false
+mongo_enable_security: false

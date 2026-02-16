@@ -1,0 +1,35 @@
+---
+
+
+- name: check if mongo config exist
+  stat: path={{mongo_data_dir}}/rs_configured
+  register: mongo_repl_config
+
+- block:
+
+    - name: Updatee replica set config 
+      template: src=mongod-{{mongo_version}}.conf.j2 dest=/etc/mongod.conf mode=0644
+
+    - name: MongoDB - start server
+      service: name=mongod state=restarted
+
+    - name: wait connection to mongo port
+      wait_for: host={{ansible_default_ipv4.address}} port={{mongo_port}} state="started" delay=5
+
+    - name: copy initRS script
+      template: src=initRS.j2 dest=/tmp/initRS.js
+
+    - name: initiate replica set from first primary
+      shell: mongosh {{ ansible_default_ipv4.address }}:{{mongo_port}} < /tmp/initRS.js
+
+    - name: mark node configure as a RS member
+      shell: touch {{mongo_data_dir}}/rs_configured
+
+
+    - name: copy master script
+      template: src=master.j2 dest=/tmp/master.js
+
+    - name: wait for host to become primary
+      shell: mongosh {{ ansible_default_ipv4.address }}:{{mongo_port}} < /tmp/master.js
+
+  when: mongo_repl_config.stat.exists == False

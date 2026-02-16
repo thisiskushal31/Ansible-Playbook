@@ -1,0 +1,22 @@
+---
+
+# - name: check if node configured as RS member
+#   stat: path=/var/lib/mongodb/rs_configured
+#   register: mongo_repl_config
+
+- name: wait for secondary MongoDB to be accessible
+  wait_for: 
+    host: "{{ ansible_default_ipv4.address }}" 
+    port: "{{ mongo_port }}" 
+    state: "started" 
+    delay: 10
+
+- name: copy addMembers script
+  template: src=managemember.sh.j2 dest=/tmp/managemember.sh
+
+- name: add members to the replica set
+  shell: bash /tmp/managemember.sh
+  # when: mongo_repl_config.stat.exists == False
+
+- name: mark node configure as a RS member
+  shell: touch {{mongo_data_dir}}/rs_configured

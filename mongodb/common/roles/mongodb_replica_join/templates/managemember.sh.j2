@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Get the primary host
+PRIMARY_HOST="{{ hostvars[ groups['primary'][0] ]['ansible_default_ipv4']['address'] }}:{{mongo_port}}"
+SECONDARY_HOST="{{ ansible_default_ipv4.address }}:{{mongo_port }}"
+ADMIN_USER="{{ hostvars[inventory_hostname]['db_cluster_admin_username'] }}"
+ADMIN_PASS="{{ hostvars[inventory_hostname]['db_cluster_admin_password'] }}"
+
+echo "Checking replica set configuration..."
+
+# Check if node already exists in replica set
+mongosh ${PRIMARY_HOST}/admin -u ${ADMIN_USER} -p ${ADMIN_PASS} --eval "rs.conf();" | grep ${SECONDARY_HOST}
+if [[ $? != 0 ]]; then
+    echo "Adding secondary node to replica set..."
+    
+    # First, ensure the secondary is properly configured for replication
+    echo "Ensuring secondary has proper replication configuration..."
+    
+    # Add the secondary with proper priority
+    mongosh ${PRIMARY_HOST}/admin -u ${ADMIN_USER} -p ${ADMIN_PASS} --eval "
+        rs.add({
+            host: '${SECONDARY_HOST}',
+            priority: 1
+        });
+    "
+    
+    # Wait for the addition to complete
+    echo "Waiting for secondary to be added..."
+    sleep 15
+    
+    # Check if secondary is now healthy
+    MEMBER_COUNT=$(mongosh ${PRIMARY_HOST}/admin -u ${ADMIN_USER} -p ${ADMIN_PASS} --eval "rs.status().members.length" --quiet)
+    echo "Current replica set has ${MEMBER_COUNT} members"
+    
+    # Only configure failover settings if this is the last secondary being added
+    if [[ ${MEMBER_COUNT} -eq {{ groups['primary'] | length + groups['secondary'] | length }} ]]; then
+        echo "All members added. Configuring replica set with failover settings..."
+        
+        # Configure write concern for majority
+        mongosh ${PRIMARY_HOST}/admin -u ${ADMIN_USER} -p ${ADMIN_PASS} --eval "
+            // Set write concern to majority
+            db.adminCommand({
+                setDefaultRWConcern: 1,
+                defaultWriteConcern: {
+                    w: 'majority',
+                    j: true,
+                    wtimeout: 5000
+                }
+            });
+        "
+        
+        echo "Replica set configured successfully with failover settings"
+    else
+        echo "Secondary added successfully. Waiting for all secondaries before configuring failover."
+    fi
+    
+else
+    echo "Node already exists in replica set"
+fi
+
+echo "Replica set configuration complete"

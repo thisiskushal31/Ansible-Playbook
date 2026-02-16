@@ -1,0 +1,10 @@
+---
+# Default variables for mongodb_replica_join role
+
+# MongoDB configuration
+mongo_port: 27017
+mongo_data_dir: '/var/lib/mongodb'
+
+# Database credentials (these should be set in hostvars)
+# db_cluster_admin_username: admin
+# db_cluster_admin_password: password

@@ -1,0 +1,5 @@
+---
+# Default variables for mongodb_admin_users role
+
+# MongoDB configuration
+mongo_port: 27017

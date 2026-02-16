@@ -1,0 +1,121 @@
+---
+- name: check if mongo already installed
+  stat: path=/usr/bin/mongosh
+  register: mongo_bin
+
+- name: MongoDB | Fetch 10Gen signing key
+  shell: "curl -fsSL https://pgp.mongodb.com/server-{{mongo_version}}.asc | gpg -o /usr/share/keyrings/mongodb-server-{{mongo_version}}.gpg --dearmor --yes"
+  when: mongo_bin.stat.exists == False
+
+#- name: MongoDB | Fetch 10Gen signing key
+#  command: apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927
+#  when: mongo_bin.stat.exists == False
+
+- name: MongoDB | Add 10Gen repository
+  shell:
+    echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-6.0.gpg ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/6.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-6.0.list
+  when: mongo_bin.stat.exists == False
+
+- name: install mongodb
+  apt: name={{ item }} state=latest update_cache=yes
+  with_items:
+    - mongodb-org-server
+    - mongodb-org-mongos
+    - mongodb-org-shell
+    - mongodb-org-tools
+    - mongodb-mongosh
+  when: mongo_bin.stat.exists == False
+
+
+- name: Example using fail and when together
+  ansible.builtin.fail:
+    msg: The system may not be provisioned according to the CMDB status.
+
+- name: MongoDB - start server
+  service: name=mongod state=started
+  when: mongo_bin.stat.exists == False
+
+- name: copy createAdmin script
+  template: src=createAdmins.j2 dest=/tmp/createAdmins.js
+  when:
+  - "'primary' in group_names"
+  - (mongo_bin.stat.exists == False)
+
+- name: create administrator users
+  shell: mongosh  < /tmp/createAdmins.js
+  when:
+  - "'primary' in group_names"
+  - (mongo_bin.stat.exists == False)
+
+# - name: MongoDB - stop server
+#   service: name=mongod state=stopped
+#   when: mongo_bin.stat.exists == False
+
+# - name: check if ssl folder already exists
+#   stat: path=/etc/ssl
+#   register: ssl_folder
+
+# - name: remove datadir content if any
+#   shell: rm -rf {{mongo_data_dir}}/*
+
+# - name: re-create ssl folder
+#   file: path=/etc/ssl state=directory
+#   when: (ssl_folder.stat.isdir == False) or ({{ force|default(False) }} == True)
+
+# - name: create self-signed SSL cert
+#   command: openssl req -newkey rsa:2048 -new -x509 -days 365 -nodes -subj "/C=FR/ST=PACA/L=SophiaAntipolis/O=YourOrga/CN=contact@yourorga.com" -out /etc/ssl/mongodb-cert.crt -keyout /etc/ssl/mongodb-cert.key
+
+# - name: compile self-signed SSL cert in PEM file
+#   shell: cat /etc/ssl/mongodb-cert.key /etc/ssl/mongodb-cert.crt > /etc/ssl/mongodb.pem
+
+# - name: backup mongo config
+#   command: mv /etc/mongod.conf /etc/mongod.conf.bak
+
+# - name: check if mongo config exist
+#   stat: path=/etc/mongod.conf
+#   register: mongo_config
+#   tags:
+#   - authkey
+ 
+# # On next startup, a configuration file will be used
+# - name: copy configuration file
+#   template: src=mongod-{{mongo_version}}.conf.j2 dest=/etc/mongod.conf mode=0644
+#   when: mongo_config.stat.exists == False
+#   tags:
+#   - authkey
+
+# - name: fetch auth key
+#   shell: |
+#     gcloud secrets versions access latest --secret  {{mongo_key_auth_secret}} > /etc/mongo.keyfile
+#     chown mongodb:mongodb /etc/mongo.keyfile
+#     chmod 600 /etc/mongo.keyfile
+#   tags:
+#   - authkey
+
+# - name: create data directory
+#   file:
+#     path: "{{mongo_data_dir}}"
+#     state: directory
+#     owner: mongodb
+#     group: mongodb
+#   tags:
+#   - temp
+
+# - name: create data directory
+#   file:
+#     path: "{{mongo_log_dir}}"
+#     state: directory
+#     owner: mongodb
+#     group: mongodb
+#   tags:
+#   - temp
+# #  when: mongo_bin.stat.exists == False
+
+# - name: MongoDB | Insure deamon is running correctly
+#   service: name=mongod state=restarted
+#   when: mongo_config.stat.exists == False
+
+# - name: wait connection to mongo port
+#   wait_for: host={{ansible_default_ipv4.address}} port=27017 state="started" delay=5
+
+

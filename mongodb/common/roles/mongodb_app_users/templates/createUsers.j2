@@ -1,0 +1,33 @@
+use {{ hostvars[inventory_hostname]['db_name'] }}
+if(!db.getUser("{{ hostvars[inventory_hostname]['db_user_name'] }}")){
+	db.createUser({
+	    user: "{{ hostvars[inventory_hostname]['db_user_name'] }}",
+	    pwd: "{{ hostvars[inventory_hostname]['db_user_password'] }}",
+	    roles:
+	    [
+	      {
+	        role: "readWrite",
+	        db: "{{ hostvars[inventory_hostname]['db_name'] }}"
+	      }
+	    ]
+	});
+}
+
+use admin
+if(!db.getUser("monitor")){
+        db.createUser({
+            user: "monitor",
+            pwd: "{{ hostvars[inventory_hostname]['monitor_user_password'] | default('fefegerm55ghht5') }}",
+            roles:
+            [
+             {
+              "role":"clusterMonitor",
+              "db":"admin"
+             },
+             {
+               "role":"read",
+               "db":"local"
+             }
+            ]
+        });
+}
