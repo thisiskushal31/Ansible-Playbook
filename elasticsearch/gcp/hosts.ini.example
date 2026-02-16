@@ -1,0 +1,49 @@
+# Elasticsearch 9.x – GCP. Group names and IPs come from this file; no hardcoding in the playbook.
+# Set es_group_* in [all:vars] if you use different group names.
+# Set es_discovery_seed_hosts and es_initial_master_nodes here (or in group_vars); playbook uses them as-is.
+
+[node.master]
+# 10.140.0.26
+
+[node.data]
+# 10.140.0.29
+# 10.140.0.32
+
+[node.coordinating]
+# 10.140.0.40
+
+[node.ingest]
+# 10.140.0.41
+
+[all:vars]
+# Inventory group names (change if you use different section names)
+# es_group_master=node.master
+# es_group_data=node.data
+# es_group_coordinating=node.coordinating
+# es_group_ingest=node.ingest
+
+# Cluster and node
+# es_version=9.1.1
+# es_cluster_name=es-cluster
+# es_node_name_prefix=es9-sf
+
+# Discovery: list of master-eligible hostnames or IPs (from the groups above)
+# es_discovery_seed_hosts=["10.140.0.26"]
+# Initial bootstrap: full node names (es_node_name_prefix-inventory_hostname_short) for master-eligible nodes
+# es_initial_master_nodes=["es9-sf-host1"]
+
+# Node role flags (set per host or in group_vars for each group)
+# es_master=1
+# es_data=1
+# es_data_master=1
+# es_coordinating=1
+# es_ingest=1
+
+# Ports and paths
+# es_http_port=9200
+# es_transport_port=9300
+
+# GCP Secret Manager (for keystore secrets – optional)
+# gcp_project=your-project
+# es_keystore_secret_name=your-secret-name
+# es_keystore_key_name=realm.ldap.password

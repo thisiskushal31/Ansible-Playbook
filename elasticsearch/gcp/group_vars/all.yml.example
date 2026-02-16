@@ -1,0 +1,20 @@
+# Copy to group_vars/all.yml and set from your inventory.
+# Discovery and initial_master_nodes: set here (or via -e) so the playbook does not hardcode them.
+# Numbers of master/data/coordinating/ingest nodes come from how many hosts you list under each group in hosts.ini.
+
+# es_version: "9.1.1"
+# es_cluster_name: "es-cluster"
+# es_node_name_prefix: "es9-sf"
+
+# List of master-eligible hostnames or IPs (from your [node.master] (and data_master) hosts)
+# es_discovery_seed_hosts:
+#   - "10.140.0.26"
+
+# List of full node names for cluster.initial_master_nodes (es_node_name_prefix-inventory_hostname_short)
+# es_initial_master_nodes:
+#   - "es9-sf-master1"
+
+# GCP Secret Manager (optional)
+# gcp_project: "your-project"
+# es_keystore_secret_name: "your-secret"
+# es_keystore_key_name: "cloud.secret"

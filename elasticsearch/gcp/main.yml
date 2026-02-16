@@ -1,0 +1,22 @@
+---
+# Elasticsearch 9.x – GCP. All group names, discovery, and counts from inventory/vars. Secrets from GCP Secret Manager.
+
+- hosts: "{{ [ es_group_master | default('node.master'), es_group_data | default('node.data'), es_group_coordinating | default(''), es_group_ingest | default('') ] | select() | join(':') }}"
+  become: true
+  remote_user: "{{ remote_user | default('ubuntu') }}"
+  vars:
+    es_version: "{{ es_version | default('9.1.1') }}"
+    es_cluster_name: "{{ es_cluster_name | default('es-cluster') }}"
+    es_node_name_prefix: "{{ es_node_name_prefix | default('es9-sf') }}"
+    es_discovery_seed_hosts: "{{ es_discovery_seed_hosts | default(groups[es_group_master | default('node.master')] | default([])) }}"
+    es_initial_master_nodes: "{{ es_initial_master_nodes | default((groups[es_group_master | default('node.master')] | default([]) | map('extract', hostvars) | map(attribute='inventory_hostname_short') | list | map('regex_replace', '^', (es_node_name_prefix | default('es9-sf')) + '-') | list)) }}"
+  roles:
+    - elasticsearch_install
+    - elasticsearch_config
+    - role: elasticsearch_keystore_gcp
+      when: (gcp_project | default('')) != '' and (es_keystore_secret_name | default('')) != ''
+  handlers:
+    - name: restart elasticsearch
+      ansible.builtin.systemd:
+        name: elasticsearch
+        state: restarted

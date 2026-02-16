@@ -1,0 +1,29 @@
+---
+# Add a secret from Azure Key Vault to the Elasticsearch keystore. Vars: azure_keyvault_name, es_keystore_secret_name, es_keystore_key_name.
+
+- name: Retrieve secret from Azure Key Vault
+  ansible.builtin.shell: |
+    az keyvault secret show --vault-name "{{ azure_keyvault_name }}" --name "{{ es_keystore_secret_name }}" --query value -o tsv
+  register: es_keystore_secret_value
+  changed_when: true
+  no_log: true
+
+- name: Abort when secret retrieval failed
+  ansible.builtin.fail:
+    msg: "Could not read secret '{{ es_keystore_secret_name }}' from vault '{{ azure_keyvault_name }}'. Check identity and permissions."
+  when: es_keystore_secret_value.rc != 0
+
+- name: Add secret to Elasticsearch keystore
+  ansible.builtin.shell: |
+    echo -n "{{ es_keystore_secret_value.stdout }}" | /usr/share/elasticsearch/bin/elasticsearch-keystore add --stdin {{ es_keystore_key_name | default('cloud.secret') }}
+  when: es_keystore_secret_value.rc == 0
+  no_log: true
+  register: es_keystore_add
+  become_user: elasticsearch
+  failed_when: es_keystore_add.rc != 0 and 'already exists' not in (es_keystore_add.stderr | default(''))
+
+- name: Restart Elasticsearch after keystore change
+  ansible.builtin.systemd:
+    name: elasticsearch
+    state: restarted
+  when: es_keystore_add is changed

@@ -1,0 +1,56 @@
+---
+- name: Install dependencies
+  ansible.builtin.apt:
+    name: ["apt-transport-https", "ca-certificates", "curl", "gnupg"]
+    state: present
+    update_cache: true
+
+- name: Create keyring directory
+  ansible.builtin.file:
+    path: /usr/share/keyrings
+    state: directory
+    mode: "0755"
+
+- name: Import Elasticsearch GPG key
+  ansible.builtin.shell: |
+    curl -fsSL https://artifacts.elastic.co/GPG-KEY-elasticsearch | gpg --dearmor -o /usr/share/keyrings/elasticsearch-keyring.gpg
+
+- name: Add Elasticsearch {{ es_version | regex_replace('^([0-9]+)\\.[0-9]+.*', '\\1') }}.x APT repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/elasticsearch-keyring.gpg] {{ es_apt_repo }} stable main"
+    filename: "elastic-{{ es_version | regex_replace('^([0-9]+)\\.[0-9]+.*', '\\1') }}.x.list"
+    state: present
+    update_cache: true
+
+- name: Install Elasticsearch package
+  ansible.builtin.apt:
+    name: elasticsearch
+    state: present
+
+- name: Ensure data and log directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: elasticsearch
+    group: elasticsearch
+    mode: "0750"
+  loop:
+    - "{{ es_data_dir }}"
+    - "{{ es_log_dir }}"
+
+- name: Set JVM heap size in jvm.options.d
+  ansible.builtin.copy:
+    content: |
+      -Xms{{ es_jvm_heap }}
+      -Xmx{{ es_jvm_heap }}
+    dest: /etc/elasticsearch/jvm.options.d/heap.options
+    owner: root
+    group: elasticsearch
+    mode: "0640"
+
+- name: Enable and start Elasticsearch
+  ansible.builtin.systemd:
+    name: elasticsearch
+    state: started
+    enabled: true
+    daemon_reload: true

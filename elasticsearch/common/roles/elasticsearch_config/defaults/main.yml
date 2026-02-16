@@ -1,0 +1,21 @@
+---
+es_version: "9.1.1"
+es_cluster_name: "es-cluster"
+es_node_name_prefix: "es9-sf"
+es_http_port: 9200
+es_transport_port: 9300
+es_master: 0
+es_data: 1
+es_data_master: 0
+es_coordinating: 0
+es_ingest: 0
+es_data_dir: "/var/lib/elasticsearch"
+es_log_dir: "/var/log/elasticsearch"
+# Discovery: set via inventory/group_vars or play; no defaults here
+es_discovery_seed_hosts: []
+es_initial_master_nodes: []
+# Inventory group names (override in hosts.ini / group_vars)
+es_group_master: "node.master"
+es_group_data: "node.data"
+es_group_coordinating: "node.coordinating"
+es_group_ingest: "node.ingest"

@@ -1,0 +1,20 @@
+# Elasticsearch 9.x – Azure. Group names and IPs from this file; set discovery in group_vars or -e.
+
+[node.master]
+# 10.0.1.10
+
+[node.data]
+# 10.0.1.11
+# 10.0.1.12
+
+[node.coordinating]
+# 10.0.1.20
+
+[node.ingest]
+# 10.0.1.21
+
+[all:vars]
+# es_group_master=node.master
+# es_group_data=node.data
+# azure_keyvault_name=my-keyvault
+# es_keystore_secret_name=elasticsearch-keystore-secret
